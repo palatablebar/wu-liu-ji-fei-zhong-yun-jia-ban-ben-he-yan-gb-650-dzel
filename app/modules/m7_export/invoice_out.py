@@ -12,7 +12,7 @@ from app.modules.m6_reconcile import service as reconcile_service
 from app.modules.m7_export import csv_out
 
 INVOICE_HEADER = [
-    "waybill_no", "carrier", "service", "zone", "pickup_utc", "billable_kg",
+    "waybill_no", "segment", "carrier", "service", "zone", "pickup_utc", "billable_kg",
     "version_id", "base_amount", "step_amount", "remote_amount", "fuel_amount",
     "insurance_amount", "total_amount", "currency",
 ]
@@ -32,6 +32,7 @@ def invoice_rows(run_id: str) -> list[dict]:
             continue
         rows.append({
             "waybill_no": row["waybill_no"],
+            "segment": row.get("segment", 1),
             "carrier": row["carrier"],
             "service": row["service"],
             "zone": row["zone"],
@@ -94,6 +95,7 @@ def manifest_doc(run_id: str) -> dict:
             "conserved": report["conserved"],
         },
         "reconcile": report["verdict"],
+        "segments": report["segments"],
         "rate_set_version": store.max_rate_set_version(),
         "params": {"profile": config.PROFILE, "quant": "0.01", "step": "0.5"},
         "export": {"invoice_rows": len(invoice_rows(run_id))},

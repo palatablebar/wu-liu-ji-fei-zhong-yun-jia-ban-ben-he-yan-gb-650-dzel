@@ -9,12 +9,14 @@ ROW_TEMPLATE = "差 {delta} 行：采信与下游行数不等"
 AMOUNT_TEMPLATE = "差 {delta} 元：分项之和与应收不等"
 VERSION_TEMPLATE = "差 {delta} 行：有运单未落到单一版本"
 WEIGHT_TEMPLATE = "差 {delta} 行：计费重来源分类不闭合"
+SEGMENT_TEMPLATE = "差 {delta} 行：各段行数之和与采信记录不闭合"
 
 TEMPLATES = {
     "rows": ROW_TEMPLATE,
     "amount": AMOUNT_TEMPLATE,
     "version": VERSION_TEMPLATE,
     "weight": WEIGHT_TEMPLATE,
+    "segments": SEGMENT_TEMPLATE,
 }
 
 

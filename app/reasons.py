@@ -9,6 +9,8 @@ REASONS: dict[str, dict[str, str]] = {
     "BOM_STRIPPED": {"label": "首列带 BOM", "level": INFO},
     "ENCODING_FALLBACK": {"label": "非 UTF-8 编码回退", "level": INFO},
     "DUPLICATE_HEADER": {"label": "重复表头", "level": INFO},
+    "SEGMENT_REORDERED": {"label": "段表头列序重排", "level": INFO},
+    "PIECES_RANGE": {"label": "件数越界（疑似与声明价值换位）", "level": BLOCK},
     "ARITY_MISMATCH": {"label": "列数与表头不一致", "level": BLOCK},
     "TRUNCATED_TAIL": {"label": "尾行截断", "level": BLOCK},
     "MISSING_KEY": {"label": "关键字段为空", "level": BLOCK},

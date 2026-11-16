@@ -55,6 +55,9 @@ WEIGHT_QUANT = Decimal("0.001")
 DIM_MAX_CM = Decimal("400")
 DIM_MIN_CM = Decimal("0")
 
+# 单票件数合理上限：超过即怀疑件数与声明价值换位（拼接文件列序漂移的残留形态）
+PIECES_MAX = 500
+
 RATE_SET_VERSION = 3
 
 REQUIRED_COLUMNS = (
@@ -101,3 +104,4 @@ SAMPLE_RATES_OVERLAP = "rate_cards_overlap.csv"
 SAMPLE_WAYBILLS = "waybills_dirty.csv"
 SAMPLE_WAYBILLS_GB = "waybills_gb18030.csv"
 SAMPLE_WAYBILLS_TRUNC = "waybills_truncated.csv"
+SAMPLE_WAYBILLS_CONCAT = "waybills_concat.csv"

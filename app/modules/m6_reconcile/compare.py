@@ -1,4 +1,4 @@
-"""四账：运单行账、金额账、版本账、计费重账。每账给出左右两侧与差额。"""
+"""五账：运单行账、金额账、版本账、计费重账、分段账。每账给出左右两侧与差额。"""
 
 from __future__ import annotations
 
@@ -86,13 +86,42 @@ def weight_account(weight_rows: list[dict]) -> dict:
     return _account("weight", "计费重账", "计费行数", billed, parts, "行")
 
 
+def segment_account(run: dict, waybill_rows: list[dict], quarantine_rows: list[dict]) -> dict:
+    """分段账：采信记录必须等于各段行数之和（拼接文件逐段闭合）。"""
+    counts: dict[int, int] = {}
+    for row in waybill_rows:
+        number = int(row.get("segment") or 1)
+        counts[number] = counts.get(number, 0) + 1
+    seen: set = set()
+    for row in quarantine_rows:
+        number = int(row.get("segment") or 1)
+        key = (number, row["line_no"])
+        if key in seen:
+            continue
+        seen.add(key)
+        counts[number] = counts.get(number, 0) + 1
+    parts = [
+        {"label": f"段{number}", "value": counts[number]}
+        for number in sorted(counts)
+    ]
+    return _account(
+        "segments",
+        "分段账",
+        "采信记录",
+        int(run.get("rows_in") or 0),
+        parts,
+        "行",
+    )
+
+
 def accounts(run: dict, quarantine_rows: list[dict], weight_rows: list[dict],
-             charge_rows: list[dict]) -> list[dict]:
+             charge_rows: list[dict], waybill_rows: list[dict]) -> list[dict]:
     return [
         row_account(run, quarantine_rows, weight_rows),
         amount_account(charge_rows),
         version_account(run, weight_rows),
         weight_account(weight_rows),
+        segment_account(run, waybill_rows, quarantine_rows),
     ]
 
 

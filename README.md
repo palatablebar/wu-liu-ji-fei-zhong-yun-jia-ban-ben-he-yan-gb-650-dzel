@@ -7,12 +7,13 @@
 ## 能力
 
 - 运单采信：编码回退链、重复表头、列数校验、尾行截断、全角与千分位、单位换算、时区归一
+- 拼接文件：段表头按列名集合识别（列序可重排）、每段独立列序与段摘要、件数上界兜底换位
 - 运价版本：生效区间半开择版、区间重叠检测、陈旧运价集拒绝
 - 质量隔离：原因码分级、隔离区证据行、可导出 CSV
 - 计费重：体积重按服务除数、取实重与体积重的较大值、按 0.5 kg 台阶向上进位
 - 分区附加：首重价 + 续重单价 × 段数、最低收费兜底、偏远固定额、燃油百分比、保价费率
-- 账单对账：运单行账、金额账、版本账、计费重账四账相等
-- 导出：账单 CSV、证据 CSV、运行清单 JSON（含 run_id 与输入 sha256）
+- 账单对账：运单行账、金额账、版本账、计费重账、分段账五账相等
+- 导出：账单 CSV、证据 CSV、运行清单 JSON（含 run_id、输入 sha256 与段摘要）
 
 ## 模块
 
@@ -23,7 +24,7 @@
 | M3 质量隔离 | 原因码分布与证据导出 | `GET /api/quarantine` `GET /api/quarantine.csv` |
 | M4 计费重 | 体积重与进位 | `POST /api/weights` |
 | M5 分区附加 | 分区价与附加费叠算 | `POST /api/charges` |
-| M6 账单对账 | 四账核对 | `GET /api/reconcile` |
+| M6 账单对账 | 五账核对 | `GET /api/reconcile` |
 | M7 导出 | 账单、证据、清单 | `GET /api/export/invoice.csv` |
 
 ## 核心规则
@@ -35,6 +36,8 @@
 4. 兜底：分区价低于 `min_charge` 时补差额到首重项。
 5. 附加：偏远固定额，燃油 = `(基础 + 续重) × fuel_pct`，保价 = `声明价值 × insurance_pct`。
 6. 应收：五个分项之和，先各自量化到分再相加，合计必然等于分项之和。
+7. 拼接：列名集合相同的重复表头即段边界，每段按自己的列序取值；件数超过
+   `PIECES_MAX` 记 PIECES_RANGE 进隔离区；同一文件重试命中同一 run_id，不重复计费。
 
 ## 定义与已知不覆盖
 
@@ -57,8 +60,11 @@ docker compose up -d --build
 2. 运单页点「导入」，得到 27 条记录、15 票计费、12 行隔离与原因码分布
 3. 计费重页点「计算」，看 9 票体积重择用、6 票实重择用
 4. 分区附加页点「计算」，看五个分项与应收 1521.04 元
-5. 账单对账页看四账相等
+5. 账单对账页看五账相等
 6. 导出页取账单 CSV、证据 CSV 与运行清单
+7. 运单页改选 `waybills_concat.csv` 导入拼接样例：3 段各自成账，段 2 表头列序
+   重排仍按真实申报价值计保价，段 3 的值级换位行被 PIECES_RANGE 隔离；
+   对账页看分段账与逐段应收，重复导入同一文件 run_id 与合计不变
 
 ## 目录
 
@@ -68,7 +74,7 @@ app/modules/m1_waybill … m7_export   每个模块 handler + service + 2-3 个�
 app/templates   base + 6 页
 app/static      theme/layout/components + 3 个 js
 docs/           DEPTH.md DATA-DICTIONARY.md RUNBOOK.md
-sample_data/    rate_cards.csv（干净）与 4 份脏运单
+sample_data/    rate_cards.csv（干净）与 5 份脏运单（含拼接样例）
 tests/          每模块一个测试文件 + e2e + 不变量
 ```
 

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS rate_cards (
 CREATE TABLE IF NOT EXISTS waybills (
   run_id TEXT NOT NULL,
   line_no INTEGER NOT NULL,
+  segment INTEGER NOT NULL DEFAULT 1,
   waybill_no TEXT NOT NULL,
   carrier TEXT NOT NULL,
   service TEXT NOT NULL,
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS waybills (
 CREATE TABLE IF NOT EXISTS quarantine (
   run_id TEXT NOT NULL,
   line_no INTEGER NOT NULL,
+  segment INTEGER NOT NULL DEFAULT 1,
   waybill_no TEXT NOT NULL DEFAULT '',
   code TEXT NOT NULL,
   detail TEXT NOT NULL DEFAULT '',
@@ -93,6 +95,7 @@ CREATE TABLE IF NOT EXISTS weight_lines (
 CREATE TABLE IF NOT EXISTS charge_lines (
   run_id TEXT NOT NULL,
   waybill_no TEXT NOT NULL,
+  segment INTEGER NOT NULL DEFAULT 1,
   version_id TEXT NOT NULL DEFAULT '',
   base_amount TEXT NOT NULL DEFAULT '0.00',
   step_amount TEXT NOT NULL DEFAULT '0.00',
@@ -128,6 +131,17 @@ def session():
 def init_db() -> None:
     with session() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn) -> None:
+    """老库补列：段号是拼接文件的结算维度，缺省 1 表示单段文件。"""
+    for table in ("waybills", "quarantine", "charge_lines"):
+        cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
+        if "segment" not in cols:
+            conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN segment INTEGER NOT NULL DEFAULT 1"
+            )
 
 
 def rows(sql: str, params: tuple = ()) -> list[dict]:
@@ -248,13 +262,13 @@ def replace_waybills(run_id: str, items: list[dict]) -> None:
     with session() as conn:
         conn.execute("DELETE FROM waybills WHERE run_id = ?", (run_id,))
         conn.executemany(
-            "INSERT INTO waybills (run_id, line_no, waybill_no, carrier, service, zone, "
+            "INSERT INTO waybills (run_id, line_no, segment, waybill_no, carrier, service, zone, "
             "pickup_utc, weight_kg, length_cm, width_cm, height_cm, declared_value, pieces, codes) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
-                    run_id, it["line_no"], it["waybill_no"], it["carrier"], it["service"],
-                    it["zone"], it["pickup_utc"], it["weight_kg"], it["length_cm"],
+                    run_id, it["line_no"], it.get("segment", 1), it["waybill_no"], it["carrier"],
+                    it["service"], it["zone"], it["pickup_utc"], it["weight_kg"], it["length_cm"],
                     it["width_cm"], it["height_cm"], it["declared_value"], it["pieces"],
                     it["codes"],
                 )
@@ -271,10 +285,11 @@ def replace_quarantine(run_id: str, items: list[dict]) -> None:
     with session() as conn:
         conn.execute("DELETE FROM quarantine WHERE run_id = ?", (run_id,))
         conn.executemany(
-            "INSERT OR REPLACE INTO quarantine (run_id, line_no, waybill_no, code, detail, raw) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO quarantine (run_id, line_no, segment, waybill_no, code, detail, raw) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
-                (run_id, it["line_no"], it["waybill_no"], it["code"], it["detail"], it["raw"])
+                (run_id, it["line_no"], it.get("segment", 1), it["waybill_no"],
+                 it["code"], it["detail"], it["raw"])
                 for it in items
             ],
         )
@@ -311,13 +326,13 @@ def replace_charge_lines(run_id: str, items: list[dict]) -> None:
     with session() as conn:
         conn.execute("DELETE FROM charge_lines WHERE run_id = ?", (run_id,))
         conn.executemany(
-            "INSERT INTO charge_lines (run_id, waybill_no, version_id, base_amount, step_amount, "
+            "INSERT INTO charge_lines (run_id, waybill_no, segment, version_id, base_amount, step_amount, "
             "remote_amount, fuel_amount, insurance_amount, total_amount, codes) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
-                    run_id, it["waybill_no"], it["version_id"], it["base_amount"],
-                    it["step_amount"], it["remote_amount"], it["fuel_amount"],
+                    run_id, it["waybill_no"], it.get("segment", 1), it["version_id"],
+                    it["base_amount"], it["step_amount"], it["remote_amount"], it["fuel_amount"],
                     it["insurance_amount"], it["total_amount"], it["codes"],
                 )
                 for it in items

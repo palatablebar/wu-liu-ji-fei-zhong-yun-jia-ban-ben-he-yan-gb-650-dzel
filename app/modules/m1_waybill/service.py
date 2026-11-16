@@ -1,4 +1,4 @@
-"""M1 编排：解码 → 拆表 → 单行归一 → 交给质量断言 → 落库（幂等）。"""
+"""M1 编排：解码 → 拆表 → 按段布局归一 → 交给质量断言 → 落库（幂等）。"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def _sample_bytes(name: str) -> bytes:
     return path.read_bytes()
 
 
-def _draft(record: reader.Record, header: list[str], styles: set[str]) -> dict:
+def _draft(record: reader.Record, layout: list[str], styles: set[str]) -> dict:
     codes: list[str] = []
     blocks: list[str] = []
 
@@ -33,10 +33,10 @@ def _draft(record: reader.Record, header: list[str], styles: set[str]) -> dict:
     elif not record.arity_ok:
         blocks.append("ARITY_MISMATCH")
 
-    waybill_no = (reader.cell(record, header, "waybill_no") or "").strip()
-    carrier = (reader.cell(record, header, "carrier") or "").strip().upper()
-    service = (reader.cell(record, header, "service") or "").strip().lower()
-    zone_raw, zone_changed = normalize.fullwidth(reader.cell(record, header, "zone"))
+    waybill_no = (reader.cell(record, layout, "waybill_no") or "").strip()
+    carrier = (reader.cell(record, layout, "carrier") or "").strip().upper()
+    service = (reader.cell(record, layout, "service") or "").strip().lower()
+    zone_raw, zone_changed = normalize.fullwidth(reader.cell(record, layout, "zone"))
     zone = zone_raw.strip().upper()
     if zone_changed:
         codes.append("FULLWIDTH_NORMALIZED")
@@ -44,17 +44,17 @@ def _draft(record: reader.Record, header: list[str], styles: set[str]) -> dict:
         blocks.append("MISSING_KEY")
 
     weight_kg, weight_codes, weight_reason = normalize.to_kg(
-        reader.cell(record, header, "weight"),
-        reader.cell(record, header, "weight_unit"),
+        reader.cell(record, layout, "weight"),
+        reader.cell(record, layout, "weight_unit"),
     )
     take(weight_codes)
     if weight_reason:
         blocks.append(weight_reason)
 
-    dim_unit = reader.cell(record, header, "dim_unit")
+    dim_unit = reader.cell(record, layout, "dim_unit")
     dims = []
     for axis in ("length", "width", "height"):
-        value, axis_codes, axis_reason = normalize.to_cm(reader.cell(record, header, axis), dim_unit)
+        value, axis_codes, axis_reason = normalize.to_cm(reader.cell(record, layout, axis), dim_unit)
         take(axis_codes)
         if axis_reason:
             blocks.append(axis_reason)
@@ -66,7 +66,7 @@ def _draft(record: reader.Record, header: list[str], styles: set[str]) -> dict:
             blocks.append(dim_reason)
 
     pickup, date_codes, date_reason, style = normalize.to_utc(
-        reader.cell(record, header, "pickup_date")
+        reader.cell(record, layout, "pickup_date")
     )
     take(date_codes)
     if date_reason:
@@ -74,12 +74,15 @@ def _draft(record: reader.Record, header: list[str], styles: set[str]) -> dict:
     if style:
         styles.add(style)
 
-    declared, declared_codes = normalize.to_amount(reader.cell(record, header, "declared_value"))
+    declared, declared_codes = normalize.to_amount(reader.cell(record, layout, "declared_value"))
     take(declared_codes)
-    pieces = normalize.to_int(reader.cell(record, header, "pieces"))
+    pieces, pieces_reason = normalize.to_pieces(reader.cell(record, layout, "pieces"))
+    if pieces_reason:
+        blocks.append(pieces_reason)
 
     draft = {
         "line_no": record.line_no,
+        "segment": record.segment,
         "raw": record.raw,
         "waybill_no": waybill_no,
         "carrier": carrier,
@@ -122,7 +125,13 @@ def import_bytes(raw: bytes, name: str) -> dict:
     keys = rates.key_index()
     known_carriers = rates.carriers()
     styles: set[str] = set()
-    drafts = [_draft(record, sheet.header, styles) for record in sheet.records]
+    drafts = []
+    for record in sheet.records:
+        layout = sheet.layout_for(record.segment)
+        draft = _draft(record, layout, styles)
+        if layout != sheet.header:
+            draft["codes"].append("SEGMENT_REORDERED")
+        drafts.append(draft)
 
     quality.apply_tz_styles(drafts, styles)
     for draft in drafts:
@@ -137,6 +146,7 @@ def import_bytes(raw: bytes, name: str) -> dict:
             for code in sort_codes(draft["blocks"]):
                 bad.append({
                     "line_no": draft["line_no"],
+                    "segment": draft["segment"],
                     "waybill_no": draft["waybill_no"],
                     "code": code,
                     "detail": " ".join(sort_codes(draft["codes"] + draft["blocks"])),
@@ -145,6 +155,7 @@ def import_bytes(raw: bytes, name: str) -> dict:
             continue
         good.append({
             "line_no": draft["line_no"],
+            "segment": draft["segment"],
             "waybill_no": draft["waybill_no"],
             "carrier": draft["carrier"],
             "service": draft["service"],
@@ -160,9 +171,24 @@ def import_bytes(raw: bytes, name: str) -> dict:
         })
 
     quarantined_lines = len({item["line_no"] for item in bad})
+    segments = []
+    for info in sheet.segment_info:
+        number = info["segment"]
+        seg_ok = sum(1 for item in good if item["segment"] == number)
+        seg_bad = len({item["line_no"] for item in bad if item["segment"] == number})
+        segments.append({
+            "segment": number,
+            "header_line": info["header_line"],
+            "reordered": info["reordered"],
+            "layout": ",".join(info["layout"]),
+            "sha256": info["sha256"],
+            "rows_in": seg_ok + seg_bad,
+            "rows_ok": seg_ok,
+            "rows_quarantined": seg_bad,
+        })
     notes = manifest.dumps({
         "file_codes": sort_codes(sheet.codes),
-        "segments": sheet.segments,
+        "segments": segments,
         "duplicate_headers": sheet.duplicate_headers,
         "empty_rows": sheet.empty_rows,
         "state": sheet.state,

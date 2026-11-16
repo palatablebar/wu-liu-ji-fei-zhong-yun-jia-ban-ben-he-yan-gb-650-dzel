@@ -22,7 +22,8 @@ def page_waybills(request: Request):
         "distribution": quality.distribution(run_id) if run_id else [],
         "samples": {"waybills": config.SAMPLE_WAYBILLS,
                     "gb": config.SAMPLE_WAYBILLS_GB,
-                    "trunc": config.SAMPLE_WAYBILLS_TRUNC},
+                    "trunc": config.SAMPLE_WAYBILLS_TRUNC,
+                    "concat": config.SAMPLE_WAYBILLS_CONCAT},
     })
     return web.page("waybills.html", context)
 

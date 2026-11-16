@@ -1,0 +1,11 @@
+waybill_no,carrier,service,zone,pickup_date,weight,weight_unit,length,width,height,dim_unit,declared_value,pieces
+WB-3001,SF,standard,Z1,2026-04-03T02:15:00+08:00,3200,g,40,30,25,cm,2000.00,2
+WB-3002,JD,standard,Z2,2026-04-05T11:00:00+08:00,2500,g,60,40,30,cm,5000.00,3
+WB-3003,YT,economy,Z2,2026-04-06T08:05:00+08:00,12.5,kg,50,40,40,cm,1200.00,1
+waybill_no,carrier,service,zone,pickup_date,weight,weight_unit,length,width,height,dim_unit,pieces,declared_value
+WB-3004,SF,standard,Z1,2026-04-07T06:20:00Z,5.2,kg,120,60,50,cm,1,800.00
+WB-3005,JD,economy,Z1,2026-04-08T10:00:00+08:00,1.2,kg,30,20,15,cm,1,1500.00
+WB-3006,SF,standard,Z1,2026-04-09T14:30:00+08:00,2,kg,20,20,20,cm,2,600.00
+waybill_no,carrier,service,zone,pickup_date,weight,weight_unit,length,width,height,dim_unit,declared_value,pieces
+WB-3007,SF,standard,Z1,2026-04-10T14:30:00+08:00,2,kg,20,20,20,cm,0,1
+WB-3008,SF,standard,Z1,2026-04-11T09:00:00+08:00,3,kg,30,30,30,cm,2,2400.00

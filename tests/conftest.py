@@ -60,6 +60,21 @@ def run_id(pipeline):
 
 
 @pytest.fixture(scope="session")
+def concat_pipeline(database):
+    """把拼接样例跑完整条流水线：3 段，段 2 列序重排，段 3 含值级换位行。"""
+    ingest = waybill_service.import_sample(config.SAMPLE_WAYBILLS_CONCAT)
+    run_id = ingest["run_id"]
+    weights = weight_service.compute_weights(run_id)
+    charges = charge_service.compute_charges(run_id)
+    return {
+        "run_id": run_id,
+        "ingest": ingest,
+        "weights": weights,
+        "charges": charges,
+    }
+
+
+@pytest.fixture(scope="session")
 def sample_bytes():
     def load(name: str) -> bytes:
         path = config.SAMPLE_DIR / name

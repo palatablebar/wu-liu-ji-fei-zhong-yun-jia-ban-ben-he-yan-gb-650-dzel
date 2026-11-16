@@ -13,7 +13,7 @@
 | M3 质量隔离 | 看原因码分布与隔离行，导出证据 CSV | GET /api/quarantine | `app/modules/m3_quality/handler.py` `app/modules/m3_quality/service.py` `app/modules/m3_quality/rules.py` `app/modules/m3_quality/quarantine.py` `app/modules/m3_quality/metrics.py` | `tests/test_m3_quality.py` |
 | M4 计费重 | 逐票看实重、体积重、来源与进位后计费重 | POST /api/weights | `app/modules/m4_weights/handler.py` `app/modules/m4_weights/service.py` `app/modules/m4_weights/volumetric.py` `app/modules/m4_weights/rounding.py` `app/modules/m4_weights/billable.py` | `tests/test_m4_weights.py` |
 | M5 分区附加 | 看首重、续重、偏远、燃油、保价与应收 | POST /api/charges | `app/modules/m5_charges/handler.py` `app/modules/m5_charges/service.py` `app/modules/m5_charges/zone.py` `app/modules/m5_charges/addon.py` `app/modules/m5_charges/money.py` | `tests/test_m5_charges.py` |
-| M6 账单对账 | 看四账是否相等，差在哪一项 | GET /api/reconcile | `app/modules/m6_reconcile/handler.py` `app/modules/m6_reconcile/service.py` `app/modules/m6_reconcile/compare.py` `app/modules/m6_reconcile/totals.py` `app/modules/m6_reconcile/explain.py` | `tests/test_m6_reconcile.py` |
+| M6 账单对账 | 看五账是否相等，差在哪一项 | GET /api/reconcile | `app/modules/m6_reconcile/handler.py` `app/modules/m6_reconcile/service.py` `app/modules/m6_reconcile/compare.py` `app/modules/m6_reconcile/totals.py` `app/modules/m6_reconcile/explain.py` | `tests/test_m6_reconcile.py` |
 | M7 导出 | 导出账单、证据行与可复算的运行清单 | GET /api/export/invoice.csv | `app/modules/m7_export/handler.py` `app/modules/m7_export/service.py` `app/modules/m7_export/csv_out.py` `app/modules/m7_export/invoice_out.py` | `tests/test_m7_export.py` |
 
 ## 陷阱登记
@@ -33,6 +33,16 @@
 | TRAP-24 | 各分项各自四舍五入 | 分项之和与应收差一分钱 | 分项先量化到分，应收由分项求和得出 | `app/modules/m5_charges/money.py` | `tests/test_m5_charges.py` |
 | TRAP-25 | 同分区两版生效区间相交 | 取到哪版看运气，同一票时高时低 | 先检测重叠，重叠即整份运价集拒绝装载 | `app/modules/m2_rates/version.py` | `tests/test_m2_rates.py` |
 | TRAP-26 | 用旧运价集重新提交 | 旧价覆盖新价，已出账单金额回退 | 运价集版本号比较，低于现有版本直接拒绝 | `app/modules/m2_rates/service.py` | `tests/test_m2_rates.py` |
+| TRAP-27 | 承运商把多次生成的运单文件拼成一份，后段表头字段相同但列序不保证 | 重排表头被当成数据行，整段按首段列序错位解析 | 列名集合相同即段表头，每段按自己的列序取值，重排段标 SEGMENT_REORDERED 并记录段摘要 | `app/modules/m1_waybill/reader.py` | `tests/test_concat_segments.py` |
+| TRAP-28 | 件数与声明价值换位 | 保价费照常生成却算在错的基数上，账单静默出错 | 表头重排由段布局修复；表头未变的值级换位由件数上界 PIECES_MAX 兜底，记 PIECES_RANGE 进隔离区 | `app/modules/m1_waybill/normalize.py` | `tests/test_concat_segments.py` |
+
+## 拼接文件结算规则
+
+1. 段：归一化后列名集合与首表头相同的行即段表头（列序任意），开启新段；每段按自己的列序取值。
+2. 不整份退回：行级阻断只隔离本行，其余段照常出账；文件级拒绝仅限空文件、无表头、解码失败。
+3. 段证据：每段记录表头行号、实际列序、行数与 sha256 摘要（表头源行 + 各记录源行，LF 连接），随运行清单落库。
+4. 段级对账：段号随运单、隔离区、账单行落库；分段账校验采信记录 = 各段行数之和，且每段 采信 = 计费 + 隔离；账单 CSV、证据 CSV、运行清单均可按段切片。
+5. 重试不重复计费：同一文件字节得同一 run_id，重复导入直接复用；采信、计费重、账单三阶段都是按 run_id 先删后插的 replace 语义；文件内跨段重复运单按文件顺序留首条（文件顺序即证据顺序），`(run_id, waybill_no)` 主键保证一票一账。
 
 ## 对账规则
 
@@ -40,11 +50,14 @@
 - 金额账：应收合计 = 基础运费 + 续重运费 + 偏远附加 + 燃油附加 + 保价费（Decimal，分）
 - 版本账：可计费运单 = 单选命中 + 无命中或重叠
 - 计费重账：计费行数 = 实重择用 + 体积重择用
+- 分段账：采信记录 = 各段行数之和，且每段 采信 = 计费 + 隔离
 - 重跑：同一份输入得到同一个 run_id，行数与合计不变
 
 ## 已知不覆盖
 
-- 不做承运商账单文件的二次导入对账，本项目只核验自家计费结果是否四账相等
+- 不做承运商账单文件的二次导入对账，本项目只核验自家计费结果是否五账相等
 - 不处理多币种换算，运价表 currency 固定 CNY，只做展示
 - 体积重只支持单一除数，不支持按件拆分后逐件取整
 - 不支持按票拆分多段运输（一票多分区），分区按整票一个值处理
+- 跨文件不去重：同一运单号出现在两份不同文件里会各自出账，跨文件对账由结算组自行核对
+- 值级换位只兜底到件数上界：表头未变且换位后件数仍不超过 PIECES_MAX 的，文件内没有可判定的证据，按采信值出账

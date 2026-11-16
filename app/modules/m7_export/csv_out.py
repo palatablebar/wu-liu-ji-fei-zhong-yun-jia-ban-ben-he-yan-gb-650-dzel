@@ -9,7 +9,7 @@ from app import store
 from app.reasons import label
 
 HEADER = [
-    "line_no", "waybill_no", "carrier", "service", "zone", "pickup_utc",
+    "line_no", "segment", "waybill_no", "carrier", "service", "zone", "pickup_utc",
     "actual_kg", "volumetric_kg", "source", "billable_kg", "steps", "version_id",
     "base_amount", "step_amount", "remote_amount", "fuel_amount", "insurance_amount",
     "total_amount", "reason_codes", "reason_labels",
@@ -37,6 +37,7 @@ def rows(run_id: str) -> list[dict]:
         codes = _merge_codes(weight.get("codes"), charge.get("codes"))
         merged.append({
             "line_no": waybill.get("line_no", 0),
+            "segment": waybill.get("segment", 1),
             "waybill_no": waybill_no,
             "carrier": waybill.get("carrier", ""),
             "service": waybill.get("service", ""),

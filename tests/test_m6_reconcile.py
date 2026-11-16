@@ -1,4 +1,4 @@
-"""M6 账单对账：四账相等、分项、差异归因。"""
+"""M6 账单对账：五账相等、分项、差异归因。"""
 
 from __future__ import annotations
 
@@ -15,11 +15,20 @@ def _accounts(run_id: str) -> dict:
     return {account["key"]: account for account in report["accounts"]}
 
 
-def test_four_accounts_all_balanced(pipeline):
+def test_five_accounts_all_balanced(pipeline):
     report = reconcile.reconcile(pipeline["run_id"])
-    assert len(report["accounts"]) == 4
+    assert len(report["accounts"]) == 5
     assert report["verdict"]["balanced"] is True
     assert report["verdict"]["broken"] == []
+
+
+def test_segment_account_partitions_rows(pipeline):
+    """分段账：各段行数之和必须等于采信记录数。"""
+    account = _accounts(pipeline["run_id"])["segments"]
+    assert account["left_value"] == ROWS_IN
+    parts = {part["label"]: part["value"] for part in account["parts"]}
+    assert parts == {"段1": 14, "段2": 13}
+    assert account["balanced"] is True
 
 
 def test_row_account_conserves(pipeline):

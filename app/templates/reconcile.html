@@ -4,7 +4,7 @@
 <section class="head">
   <h1>账单对账</h1>
   <p class="meta">
-    应收 {{ report.total|money }} 元 · 四账{{ "相等" if report.verdict.balanced else "不平" }}
+    应收 {{ report.total|money }} 元 · 五账{{ "相等" if report.verdict.balanced else "不平" }}
     · 采信 {{ report.rows_in or 0 }} 行
   </p>
 </section>
@@ -36,6 +36,35 @@
 
 <div class="rule-line">{{ rule(200) }}</div>
 
+{% if report.segments and report.segments|length > 1 %}
+<section class="block">
+  <h2>分段对账</h2>
+  <table class="grid">
+    <thead>
+      <tr><th class="num">段</th><th class="num">表头行</th><th class="num">采信</th><th class="num">计费</th>
+        <th class="num">隔离</th><th class="num">账单行</th><th class="num">应收</th><th>段摘要</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      {% for seg in report.segments %}
+      <tr class="{{ '' if seg.balanced else 'flag-bad' }}">
+        <td class="num">{{ seg.segment }}</td>
+        <td class="num">{{ seg.header_line }}</td>
+        <td class="num">{{ seg.rows_in }}</td>
+        <td class="num">{{ seg.rows_ok }}</td>
+        <td class="num">{{ seg.rows_quarantined }}</td>
+        <td class="num">{{ seg.billed }}</td>
+        <td class="num">{{ seg.amount_total|money }}</td>
+        <td class="mono dim">{{ seg.sha256[:12] }}{{ " · 列序重排" if seg.reordered }}</td>
+        <td>{{ "平" if seg.balanced else "差" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="rule-line">{{ rule(200) }}</div>
+
+{% endif %}
 <section class="block">
   <h2>导出入口</h2>
   <p class="meta"><a href="/api/export/invoice.csv">账单 CSV</a> · <a href="/api/export/evidence.csv">证据 CSV</a> · <a href="/api/export/manifest.json">运行清单</a></p>

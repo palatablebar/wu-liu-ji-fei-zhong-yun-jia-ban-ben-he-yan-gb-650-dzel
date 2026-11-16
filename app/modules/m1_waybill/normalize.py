@@ -159,3 +159,22 @@ def to_int(text: str, default: int = 1) -> int:
         return default
     value = int(number)
     return value if value > 0 else default
+
+
+def to_pieces(text: str, default: int = 1) -> tuple[int, str]:
+    """件数：空、哨兵、无法解析、非正都按 1（历史默认）。
+
+    超过 config.PIECES_MAX 记 PIECES_RANGE：拼接文件里件数与声明价值
+    换位后，件数列会吞下金额级数值，这是保价算错前的最后一道闸。
+    """
+    if is_sentinel(text):
+        return default, ""
+    number, _suffix, _codes = scan_number(text)
+    if number is None:
+        return default, ""
+    value = int(number)
+    if value <= 0:
+        return default, ""
+    if value > config.PIECES_MAX:
+        return default, "PIECES_RANGE"
+    return value, ""

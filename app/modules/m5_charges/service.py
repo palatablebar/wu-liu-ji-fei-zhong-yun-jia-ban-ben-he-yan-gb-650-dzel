@@ -57,6 +57,7 @@ def compute_charges(run_id: str) -> dict:
 
         lines.append({
             "waybill_no": weight["waybill_no"],
+            "segment": int(waybill.get("segment") or 1),
             "version_id": weight["version_id"],
             "base_amount": str(base),
             "step_amount": str(step_part),
